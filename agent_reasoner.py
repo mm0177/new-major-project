@@ -3,7 +3,7 @@ import joblib
 from groq import Groq
 
 # 1. Initialize Groq Client with your key
-client = Groq(api_key="")
+client = Groq(api_key="GROQ_API_KEY_PLACEHOLDER")
 
 def run_genai_agent(country_name):
     """Generate a structured briefing for `country_name`.
