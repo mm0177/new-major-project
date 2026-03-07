@@ -1,9 +1,17 @@
+"""
+app_v2.py — Streamlit UI using the country-specific v2 pipeline.
+
+Uses: agent_reasoner_v2 → risk_engine_v2.pkl + final_fused_dataset_v2.csv
+Original app.py is UNTOUCHED.
+
+Run with:  streamlit run app_v2.py
+"""
 import streamlit as st
 import pandas as pd
-from agent_reasoner import run_genai_agent
+from agent_reasoner_v2 import run_genai_agent
 
 st.set_page_config(
-    page_title="Supply Chain Risk | GenAI Agent",
+    page_title="Supply Chain Risk | GenAI Agent v2",
     page_icon="🌐",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -91,8 +99,8 @@ div[data-testid="stMetric"] [data-testid="stMetricValue"] {
 
 # ── Data ────────────────────────────────────────────────────────────────────
 @st.cache_data
-def load_dataframe(path: str = 'final_fused_dataset.csv'):
-    return pd.read_csv(path)
+def load_dataframe():
+    return pd.read_csv('final_fused_dataset_v2.csv')
 
 
 def risk_level(prob: float):
@@ -104,12 +112,12 @@ def risk_level(prob: float):
     return "Low", "risk-low"
 
 
-# ── Sidebar ─────────────────────────────────────────────────────────────────
+# ── Main ────────────────────────────────────────────────────────────────────
 def main():
     try:
         df = load_dataframe()
     except FileNotFoundError:
-        st.error("Missing `final_fused_dataset.csv`. Place it in the app folder.")
+        st.error("Missing `final_fused_dataset_v2.csv`. Run `fusion_xb_boost_v2.py` first.")
         return
 
     countries = sorted(df['country'].dropna().unique())
@@ -123,7 +131,7 @@ def main():
         generate = st.button("🚀 Generate Briefing", use_container_width=True)
         st.markdown("---")
         st.caption(
-            "Powered by **XGBoost** risk model, **FinBERT** sentiment analysis, "
+            "Powered by **XGBoost** risk model, **GDELT** country-specific sentiment, "
             "and **LLaMA 3.3‑70B** via Groq."
         )
 
@@ -156,7 +164,7 @@ def main():
     col1.metric("Risk Probability", f"{prob:.2%}")
     col2.metric("Risk Level", label)
     col3.metric("Sentiment Score", f"{result['sentiment']:.2f}")
-    col4.metric("News Volume", f"{result['volume']:.4f}")
+    col4.metric("News Volume", f"{result['volume']:,.0f}")
 
     st.markdown("")
 
@@ -170,11 +178,9 @@ def main():
     # ── Footer ──────────────────────────────────────────────────────────────
     st.markdown("---")
     st.caption(
-        "This dashboard uses a locally‑trained XGBoost model (`risk_engine.pkl`), "
-        "the fused dataset (`final_fused_dataset.csv`), and the Groq GenAI client "
-        "configured in `agent_reasoner.py`. "
-        "Note: Sentiment score & news volume are derived from **global** GDELT feeds "
-        "and are shared across all countries for a given month."
+        "This dashboard uses a locally‑trained XGBoost model (`risk_engine_v2.pkl`), "
+        "the country‑specific fused dataset (`final_fused_dataset_v2.csv`), and the "
+        "Groq GenAI client configured in `agent_reasoner_v2.py`."
     )
 
 
@@ -184,12 +190,9 @@ def _md_to_html(md_text: str) -> str:
         import markdown
         return markdown.markdown(md_text, extensions=['extra', 'nl2br'])
     except ImportError:
-        # Fallback: let Streamlit handle basic conversion
         import re
         html = md_text
-        # Bold
         html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-        # Newlines to <br>
         html = html.replace('\n', '<br>')
         return html
 

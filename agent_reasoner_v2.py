@@ -1,10 +1,17 @@
+"""
+agent_reasoner_v2.py — Same logic as agent_reasoner.py but uses the
+country-specific v2 model and dataset.
+
+Loads: risk_engine_v2.pkl, final_fused_dataset_v2.csv
+Original agent_reasoner.py is UNTOUCHED.
+"""
 import os
 import pandas as pd
 import joblib
 from groq import Groq
 
-# 1. Initialize Groq Client with your key
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
 
 def run_genai_agent(country_name):
     """Generate a structured briefing for `country_name`.
@@ -12,31 +19,34 @@ def run_genai_agent(country_name):
     Returns a dict with keys: `ok` (bool), `error` (str, optional),
     `risk_prob`, `sentiment`, `volume`, `ai_response`.
     """
-    # 2. Load the Fused Data and trained Model Engine
     try:
-        df = pd.read_csv('final_fused_dataset.csv')
-        model = joblib.load('risk_engine.pkl')
+        df = pd.read_csv('final_fused_dataset_v2.csv')
+        model = joblib.load('risk_engine_v2.pkl')
     except FileNotFoundError:
-        return {"ok": False, "error": "Missing required files: final_fused_dataset.csv or risk_engine.pkl"}
+        return {"ok": False, "error": "Missing required files: final_fused_dataset_v2.csv or risk_engine_v2.pkl"}
 
-    # 3. Get the latest data point for the selected country
     country_data = df[df['country'] == country_name].iloc[-1:]
     if country_data.empty:
         return {"ok": False, "error": f"Country '{country_name}' not found in dataset."}
 
-    # Prepare features for the XGBoost model
+    # Use the last row for model features (weather, etc.)
     features = country_data[['sentiment_score', 'news_volume', 'prcp', 'tavg', 'wspd']]
 
-    # Get traditional ML prediction
     try:
         risk_prob = float(model.predict_proba(features)[0][1])
     except Exception as e:
         return {"ok": False, "error": f"Model prediction failed: {e}"}
 
-    sentiment = float(country_data['sentiment_score'].values[0])
-    volume = float(country_data['news_volume'].values[0])
+    # For display: use rolling average of last 6 months to avoid sparse-data zeros
+    country_rows = df[df['country'] == country_name].tail(6)
+    sentiment = float(country_rows['sentiment_score'].replace(0, pd.NA).mean(skipna=True))
+    volume = float(country_rows['news_volume'].replace(0, pd.NA).mean(skipna=True))
+    # If still NaN (all zeros), fall back to 0
+    if pd.isna(sentiment):
+        sentiment = 0.0
+    if pd.isna(volume):
+        volume = 0.0
 
-    # 4. Use Groq (GenAI) to reason about these numbers
     prompt = f"""You are an AI Supply Chain Risk Strategist.
 Analyze the following technical data for {country_name}:
 
@@ -74,13 +84,15 @@ Keep the tone professional and direct. Use bullet points and bold text for clari
         "ai_response": ai_text,
     }
 
+
 if __name__ == "__main__":
-    # Example: Run for a specific country from your master_trade_data
     out = run_genai_agent("India")
     if not out.get("ok"):
         print("Error:", out.get("error"))
     else:
         print(f"--- GENAI STRATEGIC BRIEFING FOR India ---")
         print(f"Predictive Risk Probability: {out['risk_prob']:.2%}")
+        print(f"Sentiment: {out['sentiment']:.2f}")
+        print(f"Volume: {out['volume']:.4f}")
         print("\n[AI AGENT RESPONSE]")
         print(out['ai_response'])
